@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RuneScape Mini-Clone (Sword Update)</title>
+    <title>RuneCape</title>
     
     <style>
         /* --- General Layout --- */
@@ -121,7 +121,7 @@
 </head>
 <body>
     
-    <h1 style="color: #fff; margin-bottom: 10px;">RuneScape Mini-Clone (Sword Update)</h1>
+    <h1 style="color: #fff; margin-bottom: 10px;">RuneCape</h1>
     
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
