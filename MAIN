@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuneScape Mini-Clone (Sword Update)</title>
+    
+    <style>
+        /* --- General Layout --- */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a; 
+            font-family: Arial, sans-serif;
+            flex-direction: column;
+        }
+
+        #gameContainer {
+            display: flex;
+            flex-direction: row;
+            border: 1px solid #444; 
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* --- Canvas/Map Area --- */
+        #gameCanvas {
+            border: 2px solid #3d3d3d; 
+            background-color: #000; 
+            cursor: pointer;
+        }
+
+        /* --- Right Sidebar (UI) --- */
+        #uiPanel {
+            width: 250px; 
+            height: 604px; 
+            background-color: #2b2b2b; 
+            color: #d8c29d;
+            box-sizing: border-box;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto; 
+        }
+
+        #uiPanel h2 {
+            color: #009688; 
+            border-bottom: 2px solid #555;
+            padding-bottom: 5px;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        #uiPanel h2:first-child {
+            margin-top: 0;
+        }
+
+        .section-status {
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        /* --- Status & Action Area --- */
+        #actionStatus {
+            color: yellow;
+            font-weight: bold;
+            min-height: 40px;
+            margin-top: 5px;
+            border: 1px dashed #444;
+            padding: 5px;
+        }
+
+        /* --- Health Bar Style --- */
+        .health-bar-container {
+            width: 100%;
+            background-color: #555;
+            border: 1px solid #222;
+            height: 10px;
+            margin-top: 3px;
+        }
+        .health-bar {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s;
+        }
+
+        /* --- Buttons --- */
+        .game-button {
+            background-color: #00796b; 
+            color: white;
+            border: none;
+            padding: 8px;
+            margin-top: 5px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.1s;
+        }
+
+        .game-button:hover {
+            background-color: #00897b;
+        }
+
+        .craft-button {
+            background-color: #6b584b;
+            color: white;
+            border: 1px solid #d8c29d;
+            padding: 5px;
+            margin: 5px 0;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            transition: background-color 0.1s;
+        }
+
+        .craft-button:hover {
+            background-color: #8D6E63;
+        }
+    </style>
+</head>
+<body>
+    
+    <h1 style="color: #fff; margin-bottom: 10px;">RuneScape Mini-Clone (Sword Update)</h1>
+    
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="uiPanel">
+            
+            <div id="playerSection" class="section-status">
+                <h2>Player Stats ⚔️</h2>
+                <div id="playerHealthStatus" class="status">HP: 100/100</div>
+                <div class="health-bar-container">
+                    <div id="playerHealthBar" class="health-bar" style="width: 100%;"></div>
+                </div>
+            </div>
+
+            <div id="inventorySection" class="section-status">
+                <h2>Inventory 🎒</h2>
+                <div id="logCount" class="status">🪵 Logs: 0</div>
+                <div id="stoneCount" class="status">🪨 Stone: 0</div>
+                <div id="goldCount" class="status">💰 Gold: 0</div>
+                <div id="ironBarCount" class="status">🔩 Iron Bars: 0</div>
+                <div id="potionCount" class="status">🧪 Potions: 0</div>
+                
+            </div>
+            
+            <div id="equipmentSection" class="section-status">
+                <h2>Equipment 🛡️</h2>
+                <div id="swordLevel" class="status">⚔️ Sword: Lvl 1</div>
+                <div id="axeLevel" class="status">🪓 Axe: Lvl 1</div>
+                <div id="pickaxeLevel" class="status">⛏️ Pickaxe: Lvl 1</div>
+                <button class="game-button" onclick="useHealthPotion()" id="potionButton" disabled>Use Potion (+25 HP)</button>
+            </div>
+            
+            <div id="statusSection" class="section-status">
+                <h2>Game Status 💬</h2>
+                <div id="actionStatus">Ready. Click to move or interact.</div>
+            </div>
+
+            <div id="buttons" style="margin-top: auto;"> 
+                <button class="game-button" onclick="saveGame()">💾 SAVE GAME</button>
+                <button class="game-button" onclick="loadGame()">↩️ LOAD GAME</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const logDisplay = document.getElementById('logCount');
+        const stoneDisplay = document.getElementById('stoneCount');
+        const goldDisplay = document.getElementById('goldCount');
+        const ironBarDisplay = document.getElementById('ironBarCount');
+        const potionDisplay = document.getElementById('potionCount');
+        const axeLevelDisplay = document.getElementById('axeLevel');
+        const pickaxeLevelDisplay = document.getElementById('pickaxeLevel');
+        const swordLevelDisplay = document.getElementById('swordLevel');
+        const actionStatus = document.getElementById('actionStatus');
+        const playerHealthStatus = document.getElementById('playerHealthStatus');
+        const playerHealthBar = document.getElementById('playerHealthBar');
+        const potionButton = document.getElementById('potionButton');
+
+        // --- Game Constants ---
+        const TILE_SIZE = 40;
+        const TILE_X_COUNT = canvas.width / TILE_SIZE; 
+        const TILE_Y_COUNT = canvas.height / TILE_SIZE; 
+        const SAVE_KEY = 'runescapeMiniSave_Combat';
+        const PLAYER_MAX_HP = 100;
+        
+        // --- World Map Definition (20x20 world) ---
+        // 0: Grass, 1: Tree Node, 2: Water, 3: Road, 4: Rock Node, 5: Blacksmith Forge
+        // 6: Crab Spawn, 7: Goblin Spawn, 8: King Crab, 9: Goblin King
+        const WORLD_MAP_TILES = [
+            [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+            [2,6,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,2],
+            [2,6,0,1,1,1,0,7,7,0,4,0,0,0,7,7,0,0,6,2],
+            [2,6,0,1,1,1,7,0,0,0,4,0,0,0,0,7,0,0,6,2],
+            [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,3,0,0,0,0,3,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,3,0,5,0,0,3,0,0,0,0,0,2], // Blacksmith Forge at (10, 8)
+            [2,0,0,0,0,0,0,0,3,0,0,0,0,3,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+            [2,0,0,4,0,0,0,0,0,0,0,0,1,1,0,9,0,8,0,2], // Goblin King (9) at (15, 12), King Crab (8) at (17, 12)
+            [2,6,0,4,0,0,7,0,0,0,0,0,1,1,0,0,0,0,6,2],
+            [2,6,6,0,0,7,0,0,0,0,0,0,0,0,0,0,0,6,6,2],
+            [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+            [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+            [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]
+        ];
+        const WORLD_MAP_SIZE = WORLD_MAP_TILES.length; 
+
+        // Map tile properties and emojis
+        const TILE_PROPS = {
+            0: { color: '#4CAF50', passable: true, name: 'Grass' },
+            1: { color: '#006400', passable: false, name: 'Tree Node', interact: 'Lumber', baseHarvestTime: 60, emoji: '🌲' },
+            2: { color: '#03A9F4', passable: false, name: 'Water' },
+            3: { color: '#8D6E63', passable: true, name: 'Road' },
+            4: { color: '#808080', passable: false, name: 'Rock Node', interact: 'Mining', baseHarvestTime: 80, emoji: '🪨' },
+            5: { color: '#8B4513', passable: false, name: 'Blacksmith Forge', interact: 'Craft', baseHarvestTime: 0, emoji: '🔥' },
+            // Enemies
+            6: { color: '#F08080', passable: false, name: 'Crab', interact: 'Attack', type: 'enemy', emoji: '🦀' },
+            7: { color: '#7CFC00', passable: false, name: 'Goblin', interact: 'Attack', type: 'enemy', emoji: '🟢' },
+            8: { color: '#B22222', passable: false, name: 'King Crab', interact: 'Attack', type: 'enemy', emoji: '👑' }, 
+            9: { color: '#008000', passable: false, name: 'Goblin King', interact: 'Attack', type: 'enemy', emoji: '👑' }
+        };
+
+        const ENEMY_STATS = {
+            'Crab':          { hp: 15, maxDmg: 5, lootGold: 2, lootChance: 0.1 },
+            'Goblin':        { hp: 20, maxDmg: 7, lootGold: 4, lootChance: 0.15 },
+            'King Crab':     { hp: 100, maxDmg: 15, lootGold: 50, lootChance: 0.5 }, 
+            'Goblin King':   { hp: 120, maxDmg: 20, lootGold: 75, lootChance: 0.6 }
+        };
+
+        const UPGRADES = {
+  Axe: [
+    { costLogs: 5, costStone: 5, timeReduction: 0.15, name: "Bronze Axe" }, // Level 2
+    { costLogs: 15, costStone: 15, timeReduction: 0.30, name: "Iron Axe" } // Level 3
+  ],
+  Pickaxe: [
+    { costLogs: 5, costStone: 5, timeReduction: 0.15, name: "Bronze Pickaxe" }, // Level 2
+    { costLogs: 15, costStone: 15, timeReduction: 0.30, name: "Iron Pickaxe" } // Level 3
+  ],
+  // Updated Sword upgrade levels to match the same pattern
+  Sword: [
+    { costLogs: 10, costStone: 10, costIron: 0, damageBonus: 5, name: "Bronze Sword" }, // Level 2
+    { costLogs: 25, costStone: 25, costIron: 0, damageBonus: 10, name: "Iron Sword" } // Level 3
+  ]
+};
+        // Base damage for level 1 sword (no iron cost)
+        const BASE_SWORD_DAMAGE = 5;
+
+        // --- Game State (Default Values) ---
+        let player = {
+            x: 10, y: 10, 
+            size: TILE_SIZE * 0.4,
+            color: 'red', 
+            targetX: 10, targetY: 10,
+            moving: false,
+            isFarming: false,
+            isFighting: false, 
+            health: PLAYER_MAX_HP, 
+            farmProgress: 0,
+            farmTargetTile: null,
+            combatTargetTile: null, 
+        };
+        
+        let inventory = {
+            logs: 0,
+            stone: 0,
+            gold: 0, 
+            ironBars: 0, // NEW: Iron Bar resource
+            potions: 0, 
+            AxeLevel: 1, 
+            PickaxeLevel: 1,
+            SwordLevel: 1 // NEW: Sword Level
+        };
+
+        let activeEnemies = []; 
+
+        let cameraX = 0; 
+        let cameraY = 0; 
+        let lastUpdateTime = 0;
+        const moveInterval = 100; 
+        const combatInterval = 1000; 
+        let lastCombatTime = 0;
+        let interactionUIActive = false;
+
+        // --- Initial Setup ---
+
+        function getEnemyKey(tx, ty) {
+            return `${tx},${ty}`;
+        }
+
+        function setupEnemies() {
+            activeEnemies = [];
+            for (let y = 0; y < WORLD_MAP_SIZE; y++) {
+                for (let x = 0; x < WORLD_MAP_SIZE; x++) {
+                    const tileType = WORLD_MAP_TILES[y][x];
+                    const tileProps = TILE_PROPS[tileType];
+                    if (tileProps.type === 'enemy') {
+                        const enemyStats = ENEMY_STATS[tileProps.name];
+                        activeEnemies.push({
+                            x: x, 
+                            y: y, 
+                            name: tileProps.name,
+                            maxHealth: enemyStats.hp,
+                            currentHealth: enemyStats.hp,
+                            maxDamage: enemyStats.maxDmg,
+                            lootGold: enemyStats.lootGold,
+                            lootChance: enemyStats.lootChance,
+                            key: getEnemyKey(x, y),
+                            isBoss: (tileProps.name.includes('King'))
+                        });
+                    }
+                }
+            }
+        }
+        setupEnemies(); 
+
+        function getEnemyAt(tx, ty) {
+            return activeEnemies.find(e => e.x === tx && e.y === ty && e.currentHealth > 0);
+        }
+
+        // --- Combat Functions ---
+        function getPlayerDamage() {
+            let baseDmg = BASE_SWORD_DAMAGE;
+            let bonusDmg = 0;
+            
+            // Apply bonus damage from upgrades
+            for (let i = 0; i < inventory.SwordLevel - 1; i++) {
+                 // Damage bonus is cumulative
+                bonusDmg += UPGRADES.Sword[i].damageBonus;
+            }
+            
+            // Total maximum damage is base + bonus
+            const maxDmg = baseDmg + bonusDmg;
+
+            // Simple random damage roll
+            return Math.floor(Math.random() * (maxDmg - 2)) + 3; // Min damage of 3 to make fights consistent
+        }
+
+        function startCombat(enemyTile) {
+            const enemy = getEnemyAt(enemyTile.x, enemyTile.y);
+            if (!enemy || player.health <= 0) {
+                 actionStatus.innerHTML = "Cannot start combat.";
+                 player.isFighting = false;
+                 player.farmTargetTile = null;
+                 return;
+            }
+
+            player.isFighting = true;
+            player.combatTargetTile = enemyTile;
+            lastCombatTime = performance.now(); 
+            actionStatus.innerHTML = `⚔️ Fighting **${enemy.name}**!`;
+        }
+        
+        function resolveCombat(timestamp) {
+            if (!player.isFighting || timestamp - lastCombatTime < combatInterval) return;
+
+            lastCombatTime = timestamp;
+            const enemyTile = player.combatTargetTile;
+            const enemy = getEnemyAt(enemyTile.x, enemyTile.y);
+            
+            if (!enemy || player.health <= 0) {
+                player.isFighting = false;
+                player.farmTargetTile = null;
+                actionStatus.innerHTML = player.health <= 0 ? 
+                    '<span style="color: red; font-size: 20px;">☠️ YOU DIED.</span>' : 
+                    "Ready. Click to move or interact.";
+                return;
+            }
+
+            // Player Attack
+            const playerDamage = getPlayerDamage();
+            enemy.currentHealth = Math.max(0, enemy.currentHealth - playerDamage);
+            actionStatus.innerHTML = `⚔️ You hit ${enemy.name} for <span style="color: yellow;">${playerDamage}</span> damage!`;
+
+            // Check if Enemy is Defeated
+            if (enemy.currentHealth <= 0) {
+                handleEnemyDefeat(enemy);
+                return;
+            }
+            
+            // Enemy Attack
+            const enemyDamage = Math.floor(Math.random() * enemy.maxDamage) + 1;
+            player.health = Math.max(0, player.health - enemyDamage);
+            actionStatus.innerHTML += ` **|** ${enemy.name} hits you for <span style="color: red;">${enemyDamage}</span> damage!`;
+
+            updatePlayerHealthUI();
+
+            // Check if Player is Defeated
+            if (player.health <= 0) {
+                player.isFighting = false;
+                player.moving = false;
+                actionStatus.innerHTML = '<span style="color: red; font-size: 20px;">☠️ YOU DIED.</span>';
+            }
+        }
+
+        function handleEnemyDefeat(enemy) {
+            player.isFighting = false;
+            player.farmTargetTile = null;
+
+            // Loot Gold
+            inventory.gold += enemy.lootGold;
+            let lootMessage = `Defeated **${enemy.name}**! Gained <span style="color: gold;">${enemy.lootGold} Gold</span>.`;
+
+            // Loot Potion
+            if (Math.random() < enemy.lootChance) {
+                inventory.potions++;
+                lootMessage += ` Found a <span style="color: cyan;">Health Potion! 🧪</span>`;
+            }
+            
+            updateUI();
+            
+            // Respawn Stone/Wood on Boss Defeat (placeholder for later progression)
+            if (enemy.isBoss && Math.random() < 0.8) {
+                 inventory.ironBars += 1;
+                 lootMessage += ` Gained <span style="color: grey;">1 Iron Bar! 🔩</span>`;
+            }
+
+            actionStatus.innerHTML = lootMessage;
+
+            // Reset player target so player can act immediately
+            player.targetX = player.x;
+            player.y = player.y;
+        }
+
+        function useHealthPotion() {
+            if (inventory.potions > 0 && player.health < PLAYER_MAX_HP) {
+                inventory.potions--;
+                player.health = Math.min(PLAYER_MAX_HP, player.health + 25);
+                updateUI();
+                updatePlayerHealthUI();
+                actionStatus.innerHTML = '🧪 Used Health Potion. <span style="color: lime;">+25 HP restored!</span>';
+            }
+        }
+        window.useHealthPotion = useHealthPotion; 
+
+        // --- Save/Load Functions ---
+
+        function saveGame() {
+            const gameState = {
+                player: { x: player.x, y: player.y, health: player.health },
+                inventory: inventory,
+                activeEnemies: activeEnemies.map(e => ({ x: e.x, y: e.y, currentHealth: e.currentHealth, key: e.key, isBoss: e.isBoss })),
+            };
+            try {
+                localStorage.setItem(SAVE_KEY, JSON.stringify(gameState));
+                actionStatus.innerHTML = '💾 <span style="color: lime;">Game Saved Successfully!</span>';
+            } catch (e) {
+                actionStatus.innerHTML = '<span style="color: red;">Error saving game.</span>';
+            }
+        }
+        window.saveGame = saveGame;
+
+        function loadGame() {
+            try {
+                const savedState = localStorage.getItem(SAVE_KEY);
+                if (savedState) {
+                    const gameState = JSON.parse(savedState);
+                    
+                    // Restore Player
+                    player.x = gameState.player.x;
+                    player.y = gameState.player.y;
+                    player.targetX = gameState.player.x;
+                    player.targetY = gameState.player.y;
+                    player.health = gameState.player.health;
+                    player.moving = false; 
+                    player.isFighting = false;
+                    player.isFarming = false;
+                    
+                    // Restore Inventory, ensuring new properties (ironBars, SwordLevel) are handled
+                    Object.assign(inventory, { 
+                        logs: 0, stone: 0, gold: 0, ironBars: 0, potions: 0, AxeLevel: 1, PickaxeLevel: 1, SwordLevel: 1
+                    }, gameState.inventory);
+
+                    // Restore Enemies
+                    setupEnemies(); 
+                    gameState.activeEnemies.forEach(savedEnemy => {
+                        const enemy = activeEnemies.find(e => e.key === savedEnemy.key);
+                        if (enemy) {
+                            enemy.currentHealth = savedEnemy.currentHealth;
+                        }
+                    });
+
+                    updateUI();
+                    updatePlayerHealthUI();
+                    actionStatus.innerHTML = '↩️ <span style="color: lime;">Game Loaded Successfully!</span>';
+                    hideInteractionUI();
+                } else {
+                    actionStatus.innerHTML = '<span style="color: orange;">No saved game found. Starting fresh.</span>';
+                    updateUI();
+                    updatePlayerHealthUI();
+                }
+            } catch (e) {
+                 actionStatus.innerHTML = '<span style="color: red;">Error loading game. Save data corrupted.</span>';
+                 player.health = PLAYER_MAX_HP;
+                 setupEnemies();
+                 updateUI();
+                 updatePlayerHealthUI();
+            }
+        }
+        window.loadGame = loadGame;
+
+        // --- Utility Functions ---
+
+        function isPassable(tx, ty) {
+             if (tx < 0 || ty < 0 || tx >= WORLD_MAP_SIZE || ty >= WORLD_MAP_SIZE) return false;
+             const type = WORLD_MAP_TILES[ty][tx];
+             const props = TILE_PROPS[type];
+             
+             // Enemies and resources are impassable targets
+             if (props.type === 'enemy' || props.interact) return false;
+
+             return props.passable;
+        }
+
+        function findAdjacentPassable(targetX, targetY) {
+            const directions = [[0, -1], [0, 1], [1, 0], [-1, 0]]; 
+
+            for (const [dx, dy] of directions) {
+                const checkX = targetX + dx;
+                const checkY = targetY + dy;
+                
+                if (checkX >= 0 && checkY >= 0 && checkX < WORLD_MAP_SIZE && checkY < WORLD_MAP_SIZE) {
+                    const type = WORLD_MAP_TILES[checkY][checkX];
+                    if (TILE_PROPS[type].passable) {
+                         return { x: checkX, y: checkY };
+                    }
+                }
+            }
+            return null; 
+        }
+
+        function updatePlayerHealthUI() {
+            const percentage = (player.health / PLAYER_MAX_HP) * 100;
+            playerHealthStatus.innerHTML = `HP: ${player.health}/${PLAYER_MAX_HP}`;
+            playerHealthBar.style.width = `${percentage}%`;
+            playerHealthBar.style.backgroundColor = percentage > 50 ? '#4CAF50' : (percentage > 20 ? '#FFC107' : '#F44336');
+        }
+
+        function updateUI() {
+            logDisplay.innerHTML = `🪵 Logs: ${inventory.logs}`;
+            stoneDisplay.innerHTML = `🪨 Stone: ${inventory.stone}`;
+            goldDisplay.innerHTML = `💰 Gold: ${inventory.gold}`;
+            ironBarDisplay.innerHTML = `🔩 Iron Bars: ${inventory.ironBars}`;
+            potionDisplay.innerHTML = `🧪 Potions: ${inventory.potions}`;
+            axeLevelDisplay.innerHTML = `🪓 Axe: Lvl ${inventory.AxeLevel}`;
+            pickaxeLevelDisplay.innerHTML = `⛏️ Pickaxe: Lvl ${inventory.PickaxeLevel}`;
+            swordLevelDisplay.innerHTML = `⚔️ Sword: Lvl ${inventory.SwordLevel}`;
+            
+            potionButton.disabled = inventory.potions === 0 || player.health >= PLAYER_MAX_HP || player.health <= 0;
+        }
+
+        // --- Blacksmith / Crafting Logic ---
+
+        function showCraftingUI() {
+            interactionUIActive = true;
+            actionStatus.innerHTML = '🔥 Click a tool below to craft or upgrade:';
+
+            let buttonContainer = document.getElementById('craftingButtons');
+            if (buttonContainer) {
+                buttonContainer.remove();
+            }
+
+            buttonContainer = document.createElement('div');
+            buttonContainer.id = 'craftingButtons';
+            document.getElementById('statusSection').insertBefore(buttonContainer, document.getElementById('actionStatus'));
+
+            function createUpgradeButton(tool, level) {
+                const upgradeIndex = level - 1;
+                const upgrade = UPGRADES[tool][upgradeIndex];
+                
+                if (!upgrade) return; 
+
+                // Check costs: Logs, Stone, AND Iron
+                const costLogs = upgrade.costLogs || 0;
+                const costStone = upgrade.costStone || 0;
+                const costIron = upgrade.costIron || 0;
+
+                const canAfford = inventory.logs >= costLogs && inventory.stone >= costStone && inventory.ironBars >= costIron;
+                
+                let costString = `${costLogs} L, ${costStone} S`;
+                if (costIron > 0) costString += `, ${costIron} I`;
+
+                const button = document.createElement('button');
+                button.className = 'craft-button';
+                button.disabled = !canAfford;
+                button.innerHTML = `Lvl ${level + 1} ${upgrade.name} (Cost: ${costString})`;
+                
+                button.onclick = () => {
+                    if (canAfford) {
+                        inventory.logs -= costLogs;
+                        inventory.stone -= costStone;
+                        inventory.ironBars -= costIron;
+                        inventory[`${tool}Level`]++;
+                        updateUI();
+                        actionStatus.innerHTML = `✨ Successfully crafted **${upgrade.name}**!`;
+                        hideInteractionUI();
+                    }
+                };
+
+                buttonContainer.appendChild(button);
+            }
+
+            // Create buttons for all three tools
+            const tools = ['Axe', 'Pickaxe', 'Sword'];
+            tools.forEach(tool => {
+                if (inventory[`${tool}Level`] <= UPGRADES[tool].length) {
+                    createUpgradeButton(tool, inventory[`${tool}Level`]);
+                } else {
+                     buttonContainer.innerHTML += `<p style="color: green; margin: 5px 0;">${tool} is max level! 💪</p>`;
+                }
+            });
+        }
+
+        function hideInteractionUI() {
+            interactionUIActive = false;
+            let buttonContainer = document.getElementById('craftingButtons');
+            if (buttonContainer) {
+                buttonContainer.remove();
+            }
+        }
+        
+        // --- Input Handling ---
+        canvas.addEventListener('click', (e) => {
+            if (player.health <= 0) {
+                 actionStatus.innerHTML = '<span style="color: red;">You are defeated. Load game or refresh.</span>';
+                 return;
+            }
+
+            player.isFarming = false; 
+            player.isFighting = false;
+            player.farmTargetTile = null;
+            player.combatTargetTile = null;
+            hideInteractionUI();
+
+            const rect = canvas.getBoundingClientRect();
+            const clickPixelX = e.clientX - rect.left;
+            const clickPixelY = e.clientY - rect.top;
+
+            const canvasTileX = Math.floor(clickPixelX / TILE_SIZE);
+            const canvasTileY = Math.floor(clickPixelY / TILE_SIZE);
+
+            const worldTargetX = canvasTileX + cameraX;
+            const worldTargetY = canvasTileY + cameraY;
+
+            if (worldTargetX >= 0 && worldTargetX < WORLD_MAP_SIZE && 
+                worldTargetY >= 0 && worldTargetY < WORLD_MAP_SIZE) {
+
+                const tileType = WORLD_MAP_TILES[worldTargetY][worldTargetX];
+                const tileProps = TILE_PROPS[tileType];
+                const enemy = getEnemyAt(worldTargetX, worldTargetY);
+
+                if (tileProps.interact) {
+                    const moveTarget = findAdjacentPassable(worldTargetX, worldTargetY);
+                    
+                    if (moveTarget) {
+                        player.targetX = moveTarget.x;
+                        player.targetY = moveTarget.y;
+                        player.moving = true;
+                        player.farmTargetTile = { x: worldTargetX, y: worldTargetY, props: tileProps }; 
+                        
+                        if (tileProps.type === 'enemy' && enemy) {
+                            actionStatus.innerHTML = `🏃 Moving to attack **${enemy.name}**...`;
+                        } else {
+                            actionStatus.innerHTML = `🏃 Moving to **${tileProps.name}**...`;
+                        }
+                    } else {
+                        actionStatus.innerHTML = `⚠️ Cannot reach **${tileProps.name}**! Blocked.`;
+                    }
+
+                } else if (tileProps.passable) {
+                    player.targetX = worldTargetX;
+                    player.targetY = worldTargetY;
+                    player.moving = true;
+                    actionStatus.innerHTML = "🏃 Moving...";
+                } else {
+                    actionStatus.innerHTML = `🛑 Cannot move to ${tileProps.name}. It is blocked.`;
+                }
+            }
+        });
+
+
+        // --- Game Logic Updates ---
+
+        function updatePlayerMovement() {
+            if (player.x === player.targetX && player.y === player.targetY) {
+                player.moving = false;
+                
+                if (player.farmTargetTile) {
+                    const props = player.farmTargetTile.props;
+                    if (props.interact === 'Craft') {
+                        showCraftingUI();
+                        actionStatus.innerHTML = `🔥 Ready to craft at the **Blacksmith Forge**!`;
+                    } else if (props.type === 'enemy') {
+                        const enemy = getEnemyAt(player.farmTargetTile.x, player.farmTargetTile.y);
+                        if (enemy && enemy.currentHealth > 0) {
+                            startCombat(player.farmTargetTile);
+                        } else {
+                            actionStatus.innerHTML = "Enemy already defeated or non-existent.";
+                            player.farmTargetTile = null;
+                        }
+                    } else {
+                        player.isFarming = true;
+                        player.farmProgress = 0;
+                        actionStatus.innerHTML = `🔨 Farming **${props.name}**...`;
+                    }
+                } else {
+                    actionStatus.innerHTML = "Ready. Click to move or interact.";
+                }
+                return;
+            }
+
+            let dx = player.targetX - player.x;
+            let dy = player.targetY - player.y;
+            
+            let nextTileX = player.x;
+            let nextTileY = player.y;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                nextTileX += (dx > 0 ? 1 : -1);
+            } else if (Math.abs(dy) > 0) {
+                nextTileY += (dy > 0 ? 1 : -1);
+            } else {
+                player.moving = false;
+                return;
+            }
+            
+            if (isPassable(nextTileX, nextTileY)) {
+                player.x = nextTileX;
+                player.y = nextTileY;
+            } else {
+                 player.moving = false;
+                 actionStatus.innerHTML = "Path blocked! Ready to move.";
+            }
+        }
+        
+        function updateFarming() {
+            if (!player.isFarming || !player.farmTargetTile) return;
+
+            const props = player.farmTargetTile.props;
+            let toolLevel = props.interact === 'Lumber' ? inventory.AxeLevel : inventory.PickaxeLevel;
+            let tool = props.interact === 'Lumber' ? 'Axe' : 'Pickaxe';
+            
+            let totalReduction = 0;
+            // Calculate time reduction from tool upgrades
+            for(let i = 0; i < toolLevel - 1; i++) {
+                if(UPGRADES[tool][i] && UPGRADES[tool][i].timeReduction) {
+                    totalReduction += UPGRADES[tool][i].timeReduction;
+                }
+            }
+            const currentHarvestTime = Math.max(20, props.baseHarvestTime * (1 - totalReduction)); 
+
+            player.farmProgress++;
+            const farmingEmoji = props.interact === 'Lumber' ? '🪓' : '⛏️';
+
+            actionStatus.innerHTML = `${farmingEmoji} Farming **${props.name}**... (Lvl ${toolLevel} ${tool}) (${Math.round(player.farmProgress / currentHarvestTime * 100)}%)`;
+
+            if (player.farmProgress >= currentHarvestTime) {
+                player.isFarming = false;
+                player.farmProgress = 0;
+                
+                if (props.interact === 'Lumber') {
+                    inventory.logs++;
+                    actionStatus.innerHTML = `🪵 Successfully cut logs with Lvl ${toolLevel} ${tool}! Ready to move.`;
+                } else if (props.interact === 'Mining') {
+                    inventory.stone++;
+                    actionStatus.innerHTML = `🪨 Successfully mined stone with Lvl ${toolLevel} ${tool}! Ready to move.`;
+                }
+                
+                updateUI();
+                player.targetX = player.x;
+                player.targetY = player.y;
+                player.farmTargetTile = null; 
+            }
+        }
+        
+        function update(timestamp) {
+            if (player.moving) {
+                if (timestamp - lastUpdateTime > moveInterval) {
+                    updatePlayerMovement();
+                    lastUpdateTime = timestamp;
+                }
+            } else if (player.isFighting && player.health > 0) {
+                resolveCombat(timestamp);
+            } else if (player.isFarming) {
+                updateFarming();
+            }
+        }
+
+
+        // --- Drawing ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+
+            cameraX = Math.floor(player.x - (TILE_X_COUNT / 2));
+            cameraY = Math.floor(player.y - (TILE_Y_COUNT / 2));
+
+            cameraX = Math.max(0, Math.min(cameraX, WORLD_MAP_SIZE - TILE_X_COUNT));
+            cameraY = Math.max(0, Math.min(cameraY, WORLD_MAP_SIZE - TILE_Y_COUNT));
+
+            // Setup for text/emojis
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = '24px Arial'; 
+
+            // Draw World Tiles and Entities
+            for (let y = 0; y < TILE_Y_COUNT; y++) {
+                for (let x = 0; x < TILE_X_COUNT; x++) {
+                    const worldTileX = x + cameraX;
+                    const worldTileY = y + cameraY;
+
+                    const tileType = WORLD_MAP_TILES[worldTileY][worldTileX];
+                    const tileProps = TILE_PROPS[tileType];
+                    
+                    const canvasX = x * TILE_SIZE;
+                    const canvasY = y * TILE_SIZE;
+
+                    // Draw Background
+                    ctx.fillStyle = tileProps.color;
+                    ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+                    
+                    // Draw Grid
+                    ctx.strokeStyle = '#222'; 
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+
+                    // Draw Emoji
+                    const emoji = tileProps.emoji;
+                    if (emoji) {
+                        ctx.fillText(emoji, canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
+                    }
+
+                    // Draw Enemy Health Bar
+                    if (tileProps.type === 'enemy') {
+                        const enemy = getEnemyAt(worldTileX, worldTileY);
+                        if (enemy && enemy.currentHealth > 0) {
+                            const barWidth = TILE_SIZE - 10;
+                            const currentHP = enemy.currentHealth;
+                            const maxHP = enemy.maxHealth;
+                            const percentage = currentHP / maxHP;
+
+                            // Background
+                            ctx.fillStyle = '#555';
+                            ctx.fillRect(canvasX + 5, canvasY - 5, barWidth, 5);
+                            // Health
+                            ctx.fillStyle = percentage > 0.5 ? '#4CAF50' : (percentage > 0.2 ? '#FFC107' : '#F44336');
+                            ctx.fillRect(canvasX + 5, canvasY - 5, barWidth * percentage, 5);
+                        }
+                    }
+                }
+            }
+            
+            // Draw Progress Bar (Farming)
+            if (player.isFarming && player.farmTargetTile) {
+                const targetProps = player.farmTargetTile.props;
+                let toolLevel = targetProps.interact === 'Lumber' ? inventory.AxeLevel : inventory.PickaxeLevel;
+                let tool = targetProps.interact === 'Lumber' ? 'Axe' : 'Pickaxe';
+
+                let totalReduction = 0;
+                for(let i = 0; i < toolLevel - 1; i++) {
+                    if(UPGRADES[tool][i] && UPGRADES[tool][i].timeReduction) {
+                        totalReduction += UPGRADES[tool][i].timeReduction;
+                    }
+                }
+                const currentHarvestTime = Math.max(20, targetProps.baseHarvestTime * (1 - totalReduction));
+
+                const canvasTargetX = (player.farmTargetTile.x - cameraX) * TILE_SIZE;
+                const canvasTargetY = (player.farmTargetTile.y - cameraY) * TILE_SIZE;
+                
+                const progressWidth = (player.farmProgress / currentHarvestTime) * TILE_SIZE;
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(canvasTargetX, canvasTargetY - 10, TILE_SIZE, 5); 
+                
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(canvasTargetX, canvasTargetY - 10, progressWidth, 5); 
+            }
+            
+            // Draw the Player
+            const playerCanvasX = (player.x - cameraX) * TILE_SIZE + (TILE_SIZE / 2);
+            const playerCanvasY = (player.y - cameraY) * TILE_SIZE + (TILE_SIZE / 2);
+
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(playerCanvasX, playerCanvasY, player.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- Main Loop ---
+        function gameLoop(timestamp) {
+            update(timestamp);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize UI and Game State
+        loadGame(); 
+        gameLoop();
+    </script>
+</body>
+</html>
